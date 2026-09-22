@@ -122,7 +122,35 @@ function requireAuth(req, res, next) {
     res.status(401).json({ error: "Invalid or expired token" });
   }
 }
+async function requireAdmin(req, res, next) {
+  try {
+    const result = await pool.query(
+      "SELECT role FROM users WHERE id = $1",
+      [req.user.id]
+    );
 
+    const user = result.rows[0];
+
+    if (!user) {
+      return res.status(404).json({
+        error: "User not found",
+      });
+    }
+
+    if (user.role !== "admin") {
+      return res.status(403).json({
+        error: "Admin access required",
+      });
+    }
+
+    next();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      error: "Server error",
+    });
+  }
+}
 // ---------- PROTECTED ROUTE ----------
 app.get("/api/me", requireAuth, async (req, res) => {
   try {
@@ -138,6 +166,12 @@ app.get("/api/me", requireAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
+});
+// ---------- ADMIN ONLY ----------
+app.get("/api/admin", requireAuth, requireAdmin, async (req, res) => {
+  res.json({
+    message: "Welcome Admin!",
+  });
 });
 
 app.listen(5000, () => console.log("API running on http://localhost:5000"));
