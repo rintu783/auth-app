@@ -1,0 +1,59 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: #f1f4f9;
+  color: #1c2333;
+}
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.card {
+  width: 100%;
+  max-width: 360px;
+  display: grid;
+  gap: 12px;
+  padding: 28px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.card h2 { margin: 0 0 4px; }
+.card p { margin: 0; }
+
+input {
+  padding: 10px 12px;
+  font-size: 1rem;
+  border: 1px solid #c5cbd8;
+  border-radius: 8px;
+}
+input:focus {
+  outline: 2px solid #4f6ef7;
+  border-color: transparent;
+}
+
+button {
+  padding: 10px 14px;
+  font-size: 1rem;
+  border: none;
+  border-radius: 8px;
+  background: #4f6ef7;
+  color: #ffffff;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+button.secondary { background: #e4e8f1; color: #1c2333; }
+
+.row { display: flex; gap: 10px; }
+.row button { flex: 1; }
+
+.error { color: #c62828; font-size: 0.95rem; }
+.success { color: #2e7d32; font-size: 0.95rem; }
