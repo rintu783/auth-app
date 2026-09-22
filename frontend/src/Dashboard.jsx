@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { API } from "./api";
 
 export default function Dashboard() {
@@ -9,11 +9,7 @@ export default function Dashboard() {
   useEffect(() => {
     const token = localStorage.getItem("token");
 
-    fetch(`${API}/me`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
+    fetch(`${API}/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => setUser(data.user))
       .catch(() => {
@@ -27,37 +23,26 @@ export default function Dashboard() {
     navigate("/", { replace: true });
   }
 
-  if (!user) {
-    return (
-      <div className="page">
-        <p>Loading...</p>
-      </div>
-    );
-  }
+  if (!user) return <div className="page"><p>Loading...</p></div>;
 
   return (
     <div className="page">
       <div className="card">
-        <h2>Dashboard</h2>
-
-        <p>
-          Welcome,{" "}
-          <strong>
-            {user.role === "admin" ? "Admin" : "User"}
-          </strong>{" "}
-          👋
-        </p>
-
-        <p>Username: {user.username}</p>
+        <h2>
+          Welcome {user.name || user.username}{" "}
+          <span className={`badge ${user.role === "admin" ? "badge-admin" : "badge-user"}`}>
+            {user.role}
+          </span>
+        </h2>
 
         <p>Email: {user.email}</p>
+        <p>Member since: {new Date(user.created_at).toLocaleDateString()}</p>
 
-        <p>Role: {user.role}</p>
+        <Link to="/profile"><button type="button">Profile</button></Link>
 
-        <p>
-          Member since:{" "}
-          {new Date(user.created_at).toLocaleDateString()}
-        </p>
+        {user.role === "admin" && (
+          <Link to="/admin"><button type="button">Open Admin Panel</button></Link>
+        )}
 
         <button onClick={logout}>Logout</button>
       </div>
