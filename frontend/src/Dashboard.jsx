@@ -9,11 +9,14 @@ export default function Dashboard() {
   useEffect(() => {
     const token = localStorage.getItem("token");
 
-    fetch(`${API}/me`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API}/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => setUser(data.user))
       .catch(() => {
-        // token missing, fake, or expired
         localStorage.removeItem("token");
         navigate("/", { replace: true });
       });
@@ -24,15 +27,38 @@ export default function Dashboard() {
     navigate("/", { replace: true });
   }
 
-  if (!user) return <div className="page"><p>Loading...</p></div>;
+  if (!user) {
+    return (
+      <div className="page">
+        <p>Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="page">
       <div className="card">
         <h2>Dashboard</h2>
-        <p>Welcome, <strong>{user.username}</strong></p>
+
+        <p>
+          Welcome,{" "}
+          <strong>
+            {user.role === "admin" ? "Admin" : "User"}
+          </strong>{" "}
+          👋
+        </p>
+
+        <p>Username: {user.username}</p>
+
         <p>Email: {user.email}</p>
-        <p>Member since: {new Date(user.created_at).toLocaleDateString()}</p>
+
+        <p>Role: {user.role}</p>
+
+        <p>
+          Member since:{" "}
+          {new Date(user.created_at).toLocaleDateString()}
+        </p>
+
         <button onClick={logout}>Logout</button>
       </div>
     </div>
