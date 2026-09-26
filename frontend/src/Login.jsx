@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { API } from "./api";
+import { useNavigate, useLocation, Link } from "react-router-dom";
+import { apiFetch } from "./api";
+import { useAuth } from "./AuthContext.jsx";
 
 export default function Login() {
   const [identifier, setIdentifier] = useState("");
@@ -9,29 +10,30 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const message = location.state?.message;   // e.g. "Registered! Please log in."
+  const { setUser } = useAuth();
+
+  // Shows a one-time message passed via navigate("/", { state: { message } }),
+  // e.g. after a password change or account deletion.
+  const infoMessage = location.state?.message;
 
   async function handleLogin(e) {
-    e.preventDefault();          // stop the browser from reloading the page
+    e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      const res = await fetch(`${API}/login`, {
+      const res = await apiFetch("/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier, password }),
       });
       const data = await res.json();
-
       if (!res.ok) {
         setError(data.error || "Login failed");
         return;
       }
-
-      localStorage.setItem("token", data.token);   // remember the login
+      setUser(data.user); // no token to store — cookies were set by the server automatically
       navigate("/dashboard");
     } catch {
-      setError("Cannot reach the server. Is the backend running?");
+      setError("Cannot reach the server");
     } finally {
       setLoading(false);
     }
@@ -39,35 +41,35 @@ export default function Login() {
 
   return (
     <div className="page">
-      <form className="card" onSubmit={handleLogin}>
+      <div className="card">
         <h2>Login</h2>
-        {message && <p className="success">{message}</p>}
 
-        <input
-          placeholder="Username or email"
-          value={identifier}
-          onChange={(e) => setIdentifier(e.target.value)}
-          autoComplete="username"
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
-        />
+        {infoMessage && <p className="success">{infoMessage}</p>}
 
-        {error && <p className="error">{error}</p>}
-
-        <div className="row">
+        <form onSubmit={handleLogin} style={{ display: "grid", gap: 12 }}>
+          <input
+            placeholder="Username or email"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            autoComplete="username"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+          />
+          {error && <p className="error">{error}</p>}
           <button type="submit" disabled={loading}>
             {loading ? "Logging in..." : "Login"}
           </button>
-          <button type="button" className="secondary" onClick={() => navigate("/register")}>
-            Register
-          </button>
-        </div>
-      </form>
+        </form>
+
+        <p>
+          No account? <Link to="/register">Register</Link>
+        </p>
+      </div>
     </div>
   );
 }

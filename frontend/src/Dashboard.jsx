@@ -1,37 +1,32 @@
-import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { API } from "./api";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "./AuthContext";
+import { avatarUrl } from "./avatar";
 
 export default function Dashboard() {
-  const [user, setUser] = useState(null);
+  const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-
-    fetch(`${API}/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => (res.ok ? res.json() : Promise.reject()))
-      .then((data) => setUser(data.user))
-      .catch(() => {
-        localStorage.removeItem("token");
-        navigate("/", { replace: true });
-      });
-  }, [navigate]);
-
-  function logout() {
-    localStorage.removeItem("token");
+  async function handleLogout() {
+    await logout();
     navigate("/", { replace: true });
   }
 
-  if (!user) return <div className="page"><p>Loading...</p></div>;
+  if (loading || !user) return <div className="page"><p>Loading...</p></div>;
 
   return (
     <div className="page">
       <div className="card">
-        <h2>
-          Welcome {user.name || user.username}{" "}
-          <span className={`badge ${user.role === "admin" ? "badge-admin" : "badge-user"}`}>
-            {user.role}
+        <h2 style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <img
+            src={avatarUrl(user.avatar)}
+            alt="avatar"
+            style={{ width: 44, height: 44, borderRadius: "50%", flexShrink: 0 }}
+          />
+          <span>
+            Welcome {user.name || user.username}{" "}
+            <span className={`badge ${user.role === "admin" ? "badge-admin" : "badge-user"}`}>
+              {user.role}
+            </span>
           </span>
         </h2>
 
@@ -44,7 +39,7 @@ export default function Dashboard() {
           <Link to="/admin"><button type="button">Open Admin Panel</button></Link>
         )}
 
-        <button onClick={logout}>Logout</button>
+        <button onClick={handleLogout}>Logout</button>
       </div>
     </div>
   );

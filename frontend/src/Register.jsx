@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { API } from "./api";
+import { useNavigate, Link } from "react-router-dom";
+import { apiFetch } from "./api";
 
 export default function Register() {
   const [form, setForm] = useState({ email: "", username: "", password: "" });
@@ -8,30 +8,24 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value });   // update just the changed field
-  }
-
   async function handleRegister(e) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      const res = await fetch(`${API}/register`, {
+      const res = await apiFetch("/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
       const data = await res.json();
-
       if (!res.ok) {
         setError(data.error || "Registration failed");
         return;
       }
-
-      navigate("/", { state: { message: "Registered! Please log in." } });
+      // Registration doesn't log the user in automatically — send them to Login
+      navigate("/", { state: { message: "Account created. Please log in." } });
     } catch {
-      setError("Cannot reach the server. Is the backend running?");
+      setError("Cannot reach the server");
     } finally {
       setLoading(false);
     }
@@ -39,44 +33,39 @@ export default function Register() {
 
   return (
     <div className="page">
-      <form className="card" onSubmit={handleRegister}>
+      <div className="card">
         <h2>Register</h2>
-
-        <input
-          name="email"
-          type="email"
-          placeholder="Email"
-          value={form.email}
-          onChange={handleChange}
-          autoComplete="email"
-        />
-        <input
-          name="username"
-          placeholder="Username"
-          value={form.username}
-          onChange={handleChange}
-          autoComplete="username"
-        />
-        <input
-          name="password"
-          type="password"
-          placeholder="Password (min 6 characters)"
-          value={form.password}
-          onChange={handleChange}
-          autoComplete="new-password"
-        />
-
-        {error && <p className="error">{error}</p>}
-
-        <div className="row">
+        <form onSubmit={handleRegister} style={{ display: "grid", gap: 12 }}>
+          <input
+            type="email"
+            placeholder="Email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            autoComplete="email"
+          />
+          <input
+            placeholder="Username"
+            value={form.username}
+            onChange={(e) => setForm({ ...form, username: e.target.value })}
+            autoComplete="username"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            autoComplete="new-password"
+          />
+          {error && <p className="error">{error}</p>}
           <button type="submit" disabled={loading}>
-            {loading ? "Creating..." : "Create account"}
+            {loading ? "Creating account..." : "Register"}
           </button>
-          <button type="button" className="secondary" onClick={() => navigate("/")}>
-            Back to login
-          </button>
-        </div>
-      </form>
+        </form>
+
+        <p>
+          Already have an account? <Link to="/">Login</Link>
+        </p>
+      </div>
     </div>
   );
 }

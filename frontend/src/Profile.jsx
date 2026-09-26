@@ -1,10 +1,19 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { API } from "./api";
+import { apiFetch } from "./api";
+import { useAuth } from "./AuthContext";
+import { AVATAR_OPTIONS, avatarUrl } from "./avatar";
 
 export default function Profile() {
-  const [user, setUser] = useState(null);
-  const [form, setForm] = useState({ name: "", age: "", gender: "" });
+  const { user, setUser, loading } = useAuth();
+  const navigate = useNavigate();
+
+  const [form, setForm] = useState({
+    name: user?.name || "",
+    age: user?.age ?? "",
+    gender: user?.gender || "",
+    avatar: user?.avatar || "Felix",
+  });
   const [profileMsg, setProfileMsg] = useState({ text: "", type: "" });
   const [profileLoading, setProfileLoading] = useState(false);
 
@@ -17,25 +26,7 @@ export default function Profile() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const navigate = useNavigate();
-  const token = localStorage.getItem("token");
-
-  useEffect(() => {
-    fetch(`${API}/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => (res.ok ? res.json() : Promise.reject()))
-      .then((data) => {
-        setUser(data.user);
-        setForm({
-          name: data.user.name || "",
-          age: data.user.age ?? "",
-          gender: data.user.gender || "",
-        });
-      })
-      .catch(() => {
-        localStorage.removeItem("token");
-        navigate("/", { replace: true });
-      });
-  }, [navigate, token]);
+  if (loading || !user) return <div className="page"><p>Loading...</p></div>;
 
   async function handleProfileSave(e) {
     e.preventDefault();
@@ -46,10 +37,10 @@ export default function Profile() {
         name: form.name,
         gender: form.gender || undefined,
         age: form.age === "" ? undefined : Number(form.age),
+        avatar: form.avatar,
       };
-      const res = await fetch(`${API}/profile`, {
+      const res = await apiFetch("/profile", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(body),
       });
       const data = await res.json();
@@ -57,7 +48,7 @@ export default function Profile() {
         setProfileMsg({ text: data.error || "Update failed", type: "error" });
         return;
       }
-      setUser(data.user);
+      setUser(data.user); // updates the shared context so Dashboard reflects it too
       setProfileMsg({ text: "Profile updated", type: "success" });
     } catch {
       setProfileMsg({ text: "Cannot reach the server", type: "error" });
@@ -71,9 +62,8 @@ export default function Profile() {
     setPwMsg({ text: "", type: "" });
     setPwLoading(true);
     try {
-      const res = await fetch(`${API}/profile/password`, {
+      const res = await apiFetch("/profile/password", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(pwForm),
       });
       const data = await res.json();
@@ -81,8 +71,10 @@ export default function Profile() {
         setPwMsg({ text: data.error || "Password change failed", type: "error" });
         return;
       }
-      setPwMsg({ text: "Password updated", type: "success" });
-      setPwForm({ currentPassword: "", newPassword: "" });
+      // Backend revokes every refresh token and clears cookies on password change —
+      // reflect that here by clearing local user state and heading to Login.
+      setUser(null);
+      navigate("/", { state: { message: "Password changed. Please log in again." } });
     } catch {
       setPwMsg({ text: "Cannot reach the server", type: "error" });
     } finally {
@@ -95,9 +87,8 @@ export default function Profile() {
     setDeleteError("");
     setDeleteLoading(true);
     try {
-      const res = await fetch(`${API}/profile`, {
+      const res = await apiFetch("/profile", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ password: deletePassword }),
       });
       const data = await res.json();
@@ -105,7 +96,7 @@ export default function Profile() {
         setDeleteError(data.error || "Delete failed");
         return;
       }
-      localStorage.removeItem("token");
+      setUser(null);
       navigate("/", { state: { message: "Account deleted" } });
     } catch {
       setDeleteError("Cannot reach the server");
@@ -114,16 +105,14 @@ export default function Profile() {
     }
   }
 
-  if (!user) return <div className="page"><p>Loading...</p></div>;
-
   return (
     <div className="page">
-      <div className="card" style={{ maxWidth: 420 }}>
+      <div className="card" style={{ maxWidth: 460 }}>
         <h2>Profile</h2>
         <p>Username: {user.username} · Role: {user.role}</p>
 
-        {/* --- Edit name / age / gender --- */}
-        <form onSubmit={handleProfileSave} style={{ display: "grid", gap: 12 }}>
+        {/* --- Edit name / age / gender / avatar --- */}
+        <form onSubmit={handleProfileSave} style={{ display: "grid", gap: 14 }}>
           <input
             placeholder="Name"
             value={form.name}
@@ -145,6 +134,32 @@ export default function Profile() {
             <option value="other">Other</option>
             <option value="prefer_not_to_say">Prefer not to say</option>
           </select>
+
+          <div>
+            <p style={{ marginBottom: 6, fontWeight: 600 }}>Avatar</p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {AVATAR_OPTIONS.map((seed) => (
+                <button
+                  key={seed}
+                  type="button"
+                  onClick={() => setForm({ ...form, avatar: seed })}
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: "50%",
+                    border: form.avatar === seed ? "3px solid #4f6ef7" : "1px solid #ccc",
+                    padding: 0,
+                    cursor: "pointer",
+                    overflow: "hidden",
+                    background: "white",
+                  }}
+                  aria-label={`Select avatar ${seed}`}
+                >
+                  <img src={avatarUrl(seed)} alt={seed} style={{ width: "100%", height: "100%" }} />
+                </button>
+              ))}
+            </div>
+          </div>
 
           {profileMsg.text && <p className={profileMsg.type}>{profileMsg.text}</p>}
 
