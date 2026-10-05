@@ -6,7 +6,7 @@ let refreshPromise = null;
 
 async function refreshAccessToken() {
   if (!refreshPromise) {
-    refreshPromise = fetch(`${API}/refresh`, {
+    refreshPromise = fetch(`${API}/auth/refresh`, {
       method: "POST",
       credentials: "include",
     }).finally(() => {

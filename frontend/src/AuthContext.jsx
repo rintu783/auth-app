@@ -28,7 +28,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function logout() {
-    await apiFetch("/logout", { method: "POST" });
+    await apiFetch("/auth/logout", { method: "POST" });
     setUser(null);
   }
 

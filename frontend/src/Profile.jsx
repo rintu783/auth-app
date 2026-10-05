@@ -26,6 +26,10 @@ export default function Profile() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  const [usernameForm, setUsernameForm] = useState({ newUsername: "", currentPassword: "" });
+  const [usernameMsg, setUsernameMsg] = useState({ text: "", type: "" });
+  const [usernameLoading, setUsernameLoading] = useState(false);
+
   if (loading || !user) return <div className="page"><p>Loading...</p></div>;
 
   async function handleProfileSave(e) {
@@ -104,6 +108,29 @@ export default function Profile() {
       setDeleteLoading(false);
     }
   }
+  async function handleUsernameChange(e) {
+  e.preventDefault();
+  setUsernameMsg({ text: "", type: "" });
+  setUsernameLoading(true);
+  try {
+    const res = await apiFetch("/profile/username", {
+      method: "PATCH",
+      body: JSON.stringify(usernameForm),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setUsernameMsg({ text: data.error || "Username change failed", type: "error" });
+      return;
+    }
+    setUser(data.user); // updates the shared context, so the header/badge reflect it too
+    setUsernameMsg({ text: "Username updated", type: "success" });
+    setUsernameForm({ newUsername: "", currentPassword: "" });
+  } catch {
+    setUsernameMsg({ text: "Cannot reach the server", type: "error" });
+  } finally {
+    setUsernameLoading(false);
+  }
+}
 
   return (
     <div className="page">
@@ -169,6 +196,33 @@ export default function Profile() {
         </form>
 
         <hr />
+
+        
+
+{/* --- Change username --- */}
+<h3>Change username</h3>
+<p style={{ margin: "0 0 8px 0", color: "#666" }}>Current username: <strong>{user.username}</strong></p>
+<form onSubmit={handleUsernameChange} style={{ display: "grid", gap: 12 }}>
+  <input
+    placeholder="New username"
+    value={usernameForm.newUsername}
+    onChange={(e) => setUsernameForm({ ...usernameForm, newUsername: e.target.value })}
+  />
+  <input
+    type="password"
+    placeholder="Current password"
+    value={usernameForm.currentPassword}
+    onChange={(e) => setUsernameForm({ ...usernameForm, currentPassword: e.target.value })}
+    autoComplete="current-password"
+  />
+
+  {usernameMsg.text && <p className={usernameMsg.type}>{usernameMsg.text}</p>}
+
+  <button type="submit" disabled={usernameLoading}>
+    {usernameLoading ? "Updating..." : "Change username"}
+  </button>
+</form>
+        
 
         {/* --- Change password --- */}
         <h3>Change password</h3>
