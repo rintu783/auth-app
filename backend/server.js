@@ -11,14 +11,19 @@ if (!process.env.JWT_SECRET) {
   console.error("JWT_SECRET is missing in .env");
   process.exit(1);
 }
+
 // A fixed, curated set of avatars — the ONLY values users are allowed to choose.
 // Each name is a "seed": the same seed always generates the same character image.
 const ALLOWED_AVATARS = [
   "Felix", "Aneka", "Milo", "Zoe", "Oscar", "Luna",
   "Leo", "Nova", "Max", "Ruby", "Sam", "Willow",
 ];
-const app = express();
 
+// Single source of truth for the refresh cookie's scope — used everywhere it's
+// set OR cleared, and must match the prefix shared by /api/auth/refresh and /api/auth/logout.
+const REFRESH_COOKIE_PATH = "/api/auth";
+
+const app = express();
 
 // ---------- GLOBAL MIDDLEWARE (must come before any route that needs it) ----------
 app.use(cors({
@@ -69,14 +74,14 @@ function setAuthCookies(res, accessToken, refreshToken) {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    path: "/api/refresh", // only ever sent back on this one endpoint
+    path: REFRESH_COOKIE_PATH, // now matches /api/auth/refresh AND /api/auth/logout
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
 }
 
 function clearAuthCookies(res) {
   res.clearCookie("accessToken");
-  res.clearCookie("refreshToken", { path: "/api/refresh" });
+  res.clearCookie("refreshToken", { path: REFRESH_COOKIE_PATH }); // must match exactly
 }
 
 // ---------- HEALTH CHECK ----------
@@ -127,7 +132,7 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
-// ---------- LOGIN (username OR email) — now issues cookies, not a JSON token ----------
+// ---------- LOGIN (username OR email) — issues cookies, not a JSON token ----------
 app.post("/api/login", async (req, res) => {
   try {
     const { identifier, password } = req.body || {};
@@ -152,18 +157,18 @@ app.post("/api/login", async (req, res) => {
     setAuthCookies(res, accessToken, refreshToken);
 
     res.json({
-  user: {
-    id: user.id,
-    username: user.username,
-    email: user.email,
-    role: user.role,
-    name: user.name,
-    age: user.age,
-    gender: user.gender,
-    avatar: user.avatar,
-    created_at: user.created_at,
-  },
-});
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        name: user.name,
+        age: user.age,
+        gender: user.gender,
+        avatar: user.avatar,
+        created_at: user.created_at,
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
@@ -186,18 +191,32 @@ function requireAuth(req, res, next) {
   }
 }
 
-function requireAdmin(req, res, next) {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "Admins only" });
+// Re-checks the CURRENT role in Postgres on every call, rather than trusting
+// the (possibly stale, up to 15 minutes old) role embedded in the access token.
+// This means a demoted admin loses access on their very next request.
+async function requireAdmin(req, res, next) {
+  try {
+    const result = await pool.query("SELECT role FROM users WHERE id = $1", [req.user.id]);
+    const user = result.rows[0];
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    if (user.role !== "admin") {
+      return res.status(403).json({ error: "Admins only" });
+    }
+    next();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
-  next();
 }
 
 // ---------- PROTECTED ROUTE ----------
 app.get("/api/me", requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, username, email, role, name, age, gender,avatar, created_at FROM users WHERE id = $1",
+      "SELECT id, username, email, role, name, age, gender, avatar, created_at FROM users WHERE id = $1",
       [req.user.id]
     );
     if (!result.rows[0]) {
@@ -215,7 +234,7 @@ app.get("/api/role", requireAuth, (req, res) => {
   res.json({ role: req.user.role });
 });
 
-// ---------- UPDATE PROFILE ----------
+// ---------- UPDATE PROFILE (name / age / gender / avatar) ----------
 app.patch("/api/profile", requireAuth, async (req, res) => {
   try {
     const { name, age, gender, avatar } = req.body || {};
@@ -261,7 +280,50 @@ app.patch("/api/profile", requireAuth, async (req, res) => {
   }
 });
 
-// ---------- CHANGE PASSWORD — now revokes all refresh tokens for this user ----------
+// ---------- CHANGE USERNAME ----------
+app.patch("/api/profile/username", requireAuth, async (req, res) => {
+  try {
+    const { newUsername, currentPassword } = req.body || {};
+
+    if (!newUsername || !currentPassword) {
+      return res.status(400).json({ error: "New username and current password are required" });
+    }
+    const cleanUsername = newUsername.trim().toLowerCase();
+    if (cleanUsername.length < 3) {
+      return res.status(400).json({ error: "Username must be at least 3 characters" });
+    }
+    if (!/^[a-z0-9_]+$/.test(cleanUsername)) {
+      return res.status(400).json({ error: "Username can only contain letters, numbers, and underscores" });
+    }
+
+    const result = await pool.query("SELECT password_hash, username FROM users WHERE id = $1", [req.user.id]);
+    const user = result.rows[0];
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const passwordOk = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!passwordOk) return res.status(401).json({ error: "Current password is incorrect" });
+
+    if (cleanUsername === user.username) {
+      return res.status(400).json({ error: "That is already your username" });
+    }
+
+    const updateResult = await pool.query(
+      `UPDATE users SET username = $1 WHERE id = $2
+       RETURNING id, username, email, role, name, age, gender, avatar, created_at`,
+      [cleanUsername, req.user.id]
+    );
+
+    res.json({ user: updateResult.rows[0] });
+  } catch (err) {
+    if (err.code === "23505") {
+      return res.status(409).json({ error: "That username is already taken" });
+    }
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ---------- CHANGE PASSWORD — revokes all refresh tokens for this user ----------
 app.patch("/api/profile/password", requireAuth, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body || {};
@@ -344,7 +406,7 @@ app.get("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ---------- REFRESH ACCESS TOKEN ----------
-app.post("/api/refresh", async (req, res) => {
+app.post("/api/auth/refresh", async (req, res) => {
   try {
     const rawToken = req.cookies.refreshToken;
     if (!rawToken) {
@@ -383,7 +445,7 @@ app.post("/api/refresh", async (req, res) => {
 });
 
 // ---------- LOGOUT ----------
-app.post("/api/logout", async (req, res) => {
+app.post("/api/auth/logout", async (req, res) => {
   try {
     const rawToken = req.cookies.refreshToken;
     if (rawToken) {
