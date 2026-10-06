@@ -5,4 +5,4 @@ export const AVATAR_OPTIONS = [
 
 export function avatarUrl(seed) {
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed || "Felix")}`;
-}
+} 

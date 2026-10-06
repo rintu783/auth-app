@@ -1,23 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Login from "./Login";
-import Register from "./Register";
-import Dashboard from "./Dashboard";
-import Profile from "./Profile";
-import AdminPanel from "./AdminPanel";
-import { useAuth } from "./AuthContext.jsx";
-
-function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="page"><p>Loading...</p></div>;
-  return user ? children : <Navigate to="/" replace />;
-}
-
-function AdminRoute({ children }) {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="page"><p>Loading...</p></div>;
-  if (!user) return <Navigate to="/" replace />;
-  return user.role === "admin" ? children : <Navigate to="/dashboard" replace />;
-}
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+import Profile from "./pages/Profile";
+import AdminPanel from "./pages/AdminPanel";
+import ProtectedRoute from "./components/ProtectedRoute";
+import AdminRoute from "./components/AdminRoute";
 
 export default function App() {
   return (
