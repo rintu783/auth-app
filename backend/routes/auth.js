@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express from "express";
 import bcrypt from "bcryptjs";
 import { pool } from "../db.js";
 import {
@@ -10,9 +10,9 @@ import {
   clearAuthCookies,
 } from "../utils/tokens.js";
 
-const router = Router();
+const router = express.Router();
 
-// ---------- REGISTER ----------
+// ---------- REGISTER ----------  POST /api/register
 router.post("/register", async (req, res) => {
   try {
     const { email, username, password } = req.body || {};
@@ -49,7 +49,7 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// ---------- LOGIN (username OR email) — issues cookies, not a JSON token ----------
+// ---------- LOGIN (username OR email) — issues cookies, not a JSON token ----------  POST /api/login
 router.post("/login", async (req, res) => {
   try {
     const { identifier, password } = req.body || {};
@@ -92,7 +92,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// ---------- REFRESH ACCESS TOKEN ----------
+// ---------- REFRESH ACCESS TOKEN ----------  POST /api/auth/refresh
 router.post("/auth/refresh", async (req, res) => {
   try {
     const rawToken = req.cookies.refreshToken;
@@ -125,7 +125,7 @@ router.post("/auth/refresh", async (req, res) => {
   }
 });
 
-// ---------- LOGOUT ----------
+// ---------- LOGOUT ----------  POST /api/auth/logout
 router.post("/auth/logout", async (req, res) => {
   try {
     const rawToken = req.cookies.refreshToken;

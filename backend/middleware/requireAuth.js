@@ -1,8 +1,6 @@
 import jwt from "jsonwebtoken";
 import { pool } from "../db.js";
 
-// Verifies the access token cookie, then confirms the user still exists.
-// On success it sets req.user = { id, role } with the role read from the database.
 export async function requireAuth(req, res, next) {
   const token = req.cookies.accessToken;
   if (!token) {

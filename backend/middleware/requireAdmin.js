@@ -1,4 +1,4 @@
-// Must run AFTER requireAuth, which sets req.user (with the role read from the database).
+// Must run AFTER requireAuth (it reads req.user, which requireAuth sets).
 export function requireAdmin(req, res, next) {
   if (req.user.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });

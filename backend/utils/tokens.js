@@ -32,6 +32,7 @@ export async function createRefreshToken(userId) {
   return rawToken;
 }
 
+// Used by login (via setAuthCookies) AND by /api/auth/refresh, so the options live in one place.
 export function setAccessCookie(res, accessToken) {
   res.cookie("accessToken", accessToken, {
     httpOnly: true,
