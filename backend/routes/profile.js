@@ -97,7 +97,7 @@ router.patch("/profile/username", requireAuth, async (req, res) => {
   try {
     const { newUsername, currentPassword } = req.body || {};
 
-    if (!newUsername || !currentPassword) {
+    if (typeof newUsername !== "string" || typeof currentPassword !== "string") {
       return res.status(400).json({ error: "New username and current password are required" });
     }
     const cleanUsername = newUsername.trim().toLowerCase();
@@ -140,7 +140,7 @@ router.patch("/profile/password", requireAuth, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body || {};
 
-    if (!currentPassword || !newPassword) {
+    if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
       return res.status(400).json({ error: "Current and new password are required" });
     }
     if (newPassword.length < 6) {
@@ -177,7 +177,7 @@ router.delete("/profile", requireAuth, async (req, res) => {
   try {
     const { password } = req.body || {};
 
-    if (!password) {
+    if (typeof password !== "string" || password.length === 0) {
       return res.status(400).json({ error: "Password is required to delete your account" });
     }
 

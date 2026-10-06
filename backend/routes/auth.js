@@ -17,7 +17,11 @@ router.post("/register", async (req, res) => {
   try {
     const { email, username, password } = req.body || {};
 
-    if (!email || !username || !password) {
+    if (
+      typeof email !== "string" ||
+      typeof username !== "string" ||
+      typeof password !== "string"
+    ) {
       return res.status(400).json({ error: "Email, username and password are required" });
     }
     if (!/^\S+@\S+\.\S+$/.test(email)) {
@@ -54,7 +58,7 @@ router.post("/login", async (req, res) => {
   try {
     const { identifier, password } = req.body || {};
 
-    if (!identifier || !password) {
+    if (typeof identifier !== "string" || typeof password !== "string") {
       return res.status(400).json({ error: "Enter your username or email, and your password" });
     }
 
