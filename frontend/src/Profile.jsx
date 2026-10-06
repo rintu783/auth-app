@@ -14,6 +14,7 @@ export default function Profile() {
     gender: user?.gender || "",
     avatar: user?.avatar || "Felix",
   });
+
   const [profileMsg, setProfileMsg] = useState({ text: "", type: "" });
   const [profileLoading, setProfileLoading] = useState(false);
 
@@ -32,20 +33,54 @@ export default function Profile() {
 
   if (loading || !user) return <div className="page"><p>Loading...</p></div>;
 
+  // Compare the form with the saved profile and return ONLY the fields that changed.
+  //   a field that is missing from the result  -> "leave it as it is"
+  //   age or gender set to null                -> "clear it"
+  // Returns { changes } on success or { error } when the form can't be saved.
+  function buildChanges() {
+    const changes = {};
+
+    const name = form.name.trim();
+    if (name !== (user.name ?? "")) {
+      if (name === "") return { error: "Name can't be empty" };
+      changes.name = name;
+    }
+
+    // String() on both sides: an <input> gives text ("30"), the database gives a number (30)
+    if (String(form.age) !== String(user.age ?? "")) {
+      changes.age = form.age === "" ? null : Number(form.age);
+    }
+
+    if (form.gender !== (user.gender ?? "")) {
+      changes.gender = form.gender === "" ? null : form.gender;
+    }
+
+    if (form.avatar !== (user.avatar ?? "Felix")) {
+      changes.avatar = form.avatar;
+    }
+
+    return { changes };
+  }
+
   async function handleProfileSave(e) {
     e.preventDefault();
     setProfileMsg({ text: "", type: "" });
+
+    const { changes, error } = buildChanges();
+    if (error) {
+      setProfileMsg({ text: error, type: "error" });
+      return;
+    }
+    if (Object.keys(changes).length === 0) {
+      setProfileMsg({ text: "Nothing to save", type: "" });
+      return;
+    }
+
     setProfileLoading(true);
     try {
-      const body = {
-        name: form.name,
-        gender: form.gender || undefined,
-        age: form.age === "" ? undefined : Number(form.age),
-        avatar: form.avatar,
-      };
       const res = await apiFetch("/profile", {
         method: "PATCH",
-        body: JSON.stringify(body),
+        body: JSON.stringify(changes),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -53,6 +88,13 @@ export default function Profile() {
         return;
       }
       setUser(data.user); // updates the shared context so Dashboard reflects it too
+      // Show exactly what was saved (for example the trimmed name)
+      setForm({
+        name: data.user.name || "",
+        age: data.user.age ?? "",
+        gender: data.user.gender || "",
+        avatar: data.user.avatar || "Felix",
+      });
       setProfileMsg({ text: "Profile updated", type: "success" });
     } catch {
       setProfileMsg({ text: "Cannot reach the server", type: "error" });
@@ -108,29 +150,30 @@ export default function Profile() {
       setDeleteLoading(false);
     }
   }
+
   async function handleUsernameChange(e) {
-  e.preventDefault();
-  setUsernameMsg({ text: "", type: "" });
-  setUsernameLoading(true);
-  try {
-    const res = await apiFetch("/profile/username", {
-      method: "PATCH",
-      body: JSON.stringify(usernameForm),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setUsernameMsg({ text: data.error || "Username change failed", type: "error" });
-      return;
+    e.preventDefault();
+    setUsernameMsg({ text: "", type: "" });
+    setUsernameLoading(true);
+    try {
+      const res = await apiFetch("/profile/username", {
+        method: "PATCH",
+        body: JSON.stringify(usernameForm),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setUsernameMsg({ text: data.error || "Username change failed", type: "error" });
+        return;
+      }
+      setUser(data.user); // updates the shared context, so the header/badge reflect it too
+      setUsernameMsg({ text: "Username updated", type: "success" });
+      setUsernameForm({ newUsername: "", currentPassword: "" });
+    } catch {
+      setUsernameMsg({ text: "Cannot reach the server", type: "error" });
+    } finally {
+      setUsernameLoading(false);
     }
-    setUser(data.user); // updates the shared context, so the header/badge reflect it too
-    setUsernameMsg({ text: "Username updated", type: "success" });
-    setUsernameForm({ newUsername: "", currentPassword: "" });
-  } catch {
-    setUsernameMsg({ text: "Cannot reach the server", type: "error" });
-  } finally {
-    setUsernameLoading(false);
   }
-}
 
   return (
     <div className="page">
@@ -155,7 +198,7 @@ export default function Profile() {
             value={form.gender}
             onChange={(e) => setForm({ ...form, gender: e.target.value })}
           >
-            <option value="">Select gender</option>
+            <option value="">Not set</option>
             <option value="male">Male</option>
             <option value="female">Female</option>
             <option value="other">Other</option>
@@ -197,32 +240,31 @@ export default function Profile() {
 
         <hr />
 
-        
+        {/* --- Change username --- */}
+        <h3>Change username</h3>
+        <p style={{ margin: "0 0 8px 0", color: "#666" }}>
+          Current username: <strong>{user.username}</strong>
+        </p>
+        <form onSubmit={handleUsernameChange} style={{ display: "grid", gap: 12 }}>
+          <input
+            placeholder="New username"
+            value={usernameForm.newUsername}
+            onChange={(e) => setUsernameForm({ ...usernameForm, newUsername: e.target.value })}
+          />
+          <input
+            type="password"
+            placeholder="Current password"
+            value={usernameForm.currentPassword}
+            onChange={(e) => setUsernameForm({ ...usernameForm, currentPassword: e.target.value })}
+            autoComplete="current-password"
+          />
 
-{/* --- Change username --- */}
-<h3>Change username</h3>
-<p style={{ margin: "0 0 8px 0", color: "#666" }}>Current username: <strong>{user.username}</strong></p>
-<form onSubmit={handleUsernameChange} style={{ display: "grid", gap: 12 }}>
-  <input
-    placeholder="New username"
-    value={usernameForm.newUsername}
-    onChange={(e) => setUsernameForm({ ...usernameForm, newUsername: e.target.value })}
-  />
-  <input
-    type="password"
-    placeholder="Current password"
-    value={usernameForm.currentPassword}
-    onChange={(e) => setUsernameForm({ ...usernameForm, currentPassword: e.target.value })}
-    autoComplete="current-password"
-  />
+          {usernameMsg.text && <p className={usernameMsg.type}>{usernameMsg.text}</p>}
 
-  {usernameMsg.text && <p className={usernameMsg.type}>{usernameMsg.text}</p>}
-
-  <button type="submit" disabled={usernameLoading}>
-    {usernameLoading ? "Updating..." : "Change username"}
-  </button>
-</form>
-        
+          <button type="submit" disabled={usernameLoading}>
+            {usernameLoading ? "Updating..." : "Change username"}
+          </button>
+        </form>
 
         {/* --- Change password --- */}
         <h3>Change password</h3>

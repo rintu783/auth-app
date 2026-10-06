@@ -176,40 +176,42 @@ app.post("/api/login", async (req, res) => {
 });
 
 // ---------- AUTH MIDDLEWARE ----------
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const token = req.cookies.accessToken;
-
   if (!token) {
     return res.status(401).json({ error: "Not logged in" });
   }
 
+  let payload;
   try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
-    next();
+    payload = jwt.verify(token, process.env.JWT_SECRET);
   } catch {
-    res.status(401).json({ error: "Invalid or expired token" });
+    return res.status(401).json({ error: "Invalid or expired token" });
   }
-}
 
-// Re-checks the CURRENT role in Postgres on every call, rather than trusting
-// the (possibly stale, up to 15 minutes old) role embedded in the access token.
-// This means a demoted admin loses access on their very next request.
-async function requireAdmin(req, res, next) {
   try {
-    const result = await pool.query("SELECT role FROM users WHERE id = $1", [req.user.id]);
-    const user = result.rows[0];
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
+    const result = await pool.query(
+      "SELECT id, role FROM users WHERE id = $1",
+      [payload.id]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      res.clearCookie("accessToken");
+      return res.status(401).json({ error: "Account no longer exists" });
     }
-    if (user.role !== "admin") {
-      return res.status(403).json({ error: "Admins only" });
-    }
+    req.user = { id: row.id, role: row.role };
     next();
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  next();
 }
 
 // ---------- PROTECTED ROUTE ----------
@@ -235,6 +237,10 @@ app.get("/api/role", requireAuth, (req, res) => {
 });
 
 // ---------- UPDATE PROFILE (name / age / gender / avatar) ----------
+// PATCH semantics:
+//   field missing (undefined) -> leave it unchanged
+//   age or gender = null      -> clear it (both columns are nullable)
+//   name or avatar            -> can be changed but never cleared
 app.patch("/api/profile", requireAuth, async (req, res) => {
   try {
     const { name, age, gender, avatar } = req.body || {};
@@ -245,11 +251,16 @@ app.patch("/api/profile", requireAuth, async (req, res) => {
     if (name !== undefined && (typeof name !== "string" || name.trim().length === 0)) {
       return res.status(400).json({ error: "Name cannot be empty" });
     }
-    if (age !== undefined && (!Number.isInteger(age) || age <= 0 || age >= 150)) {
+    // The name column is VARCHAR(255); without this check a longer name would be a 500.
+    if (name !== undefined && name.trim().length > 255) {
+      return res.status(400).json({ error: "Name must be 255 characters or fewer" });
+    }
+    if (age !== undefined && age !== null &&
+        (!Number.isInteger(age) || age <= 0 || age >= 150)) {
       return res.status(400).json({ error: "Age must be a whole number between 1 and 149" });
     }
     const allowedGenders = ["male", "female", "other", "prefer_not_to_say"];
-    if (gender !== undefined && !allowedGenders.includes(gender)) {
+    if (gender !== undefined && gender !== null && !allowedGenders.includes(gender)) {
       return res.status(400).json({ error: "Invalid gender value" });
     }
     if (avatar !== undefined && !ALLOWED_AVATARS.includes(avatar)) {
@@ -272,7 +283,9 @@ app.patch("/api/profile", requireAuth, async (req, res) => {
        RETURNING id, username, email, role, name, age, gender, avatar, created_at`,
       values
     );
-
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
     res.json({ user: result.rows[0] });
   } catch (err) {
     console.error(err);
